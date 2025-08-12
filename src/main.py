@@ -265,7 +265,7 @@ for equippable_class in ranked_armor_df['Equippable'].unique():
             'total_count': len(class_armor),
             'average_weight': average_weight_by_class[equippable_class]
         },
-        'armor': class_armor[['Id','Name','Tier', 'Equippable', 'Total', 'Armor_Weight']].to_dict('records')
+        'armor': class_armor[['Id','Name','Tier', 'Equippable', 'Total (Base)', 'Armor_Weight']].to_dict('records')
     }
 
 print(json.dumps(all_armor_by_class))

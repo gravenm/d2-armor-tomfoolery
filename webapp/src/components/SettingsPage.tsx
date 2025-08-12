@@ -33,7 +33,7 @@ interface CheckboxProps {
 
 const Checkbox: React.FC<CheckboxProps> = ({ label, checked, onChange }) => (
     <div className="mb-4">
-        <label className="flex items-center">
+        <label className="flex self-auto">
             <input type="checkbox" checked={checked} onChange={onChange} className="form-checkbox h-5 w-5 text-blue-600" />
             <span className="ml-2 text-gray-700">{label}</span>
         </label>
@@ -103,6 +103,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ weights, setWeights, onCont
             <Slider key={key} label={key} value={value as number} onChange={handleWeightChange('archetype', key)} />
           ))}
         </div>
+
         <div className="lg:col-span-3">
           <h2 className="font-serif text-xl font-bold text-gray-800 mb-4">Tier Weights</h2>
           <p className="font-sans text-gray-600 mb-8">
