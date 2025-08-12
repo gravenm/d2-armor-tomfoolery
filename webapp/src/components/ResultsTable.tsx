@@ -10,7 +10,7 @@ interface ArmorPiece {
 }
 
 interface ResultsTableProps {
-  data: Record<string, ArmorPiece[]>;
+  data: Record<string, { stats: { total_count: number; average_weight: number }; armor: ArmorPiece[] }>;
 }
 
 type SortKey = keyof ArmorPiece;
@@ -23,10 +23,10 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ data }) => {
   const sortedAndFilteredData = useMemo(() => {
     const classData = Object.entries(data);
 
-    return classData.map(([className, armorPieces]) => {
-      let filteredPieces = armorPieces;
+    return classData.map(([className, classDetails]) => {
+      let filteredPieces = classDetails.armor;
       if (filter) {
-        filteredPieces = armorPieces.filter(piece =>
+        filteredPieces = classDetails.armor.filter(piece =>
           piece.Name.toLowerCase().includes(filter.toLowerCase())
         );
       }
@@ -42,7 +42,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ data }) => {
           return 0;
         });
       }
-      return [className, filteredPieces];
+      return [className, { ...classDetails, armor: filteredPieces }];
     });
   }, [data, sortConfig, filter]);
 
@@ -67,13 +67,20 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ data }) => {
         onChange={(e) => setFilter(e.target.value)}
         className="mb-4 p-2 border border-gray-300 rounded"
       />
-      {sortedAndFilteredData.map(([className, armorPieces]) => {
-        if (!Array.isArray(armorPieces)) {
+      {sortedAndFilteredData.map(([className, classDetails]) => {
+        const details = classDetails as { stats: { total_count: number; average_weight: number }; armor: ArmorPiece[] };
+        if (!Array.isArray(details.armor)) {
           return null;
         }
         return (
           <div key={className as string} className="mb-8">
-            <h2 className="font-serif text-3xl font-bold text-gray-800 mb-4">{className as string}</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-serif text-3xl font-bold text-gray-800">{className as string}</h2>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Total Armor: {details.stats.total_count}</p>
+                <p className="text-sm text-gray-500">Avg. Weight: {details.stats.average_weight.toFixed(2)}</p>
+              </div>
+            </div>
             <div className="overflow-x-auto bg-white rounded-lg shadow">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -85,7 +92,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ data }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {(armorPieces as ArmorPiece[]).map((piece) => (
+                {details.armor.map((piece) => (
                   <tr key={piece.Id} className="hover:bg-gray-100 transition-colors duration-200">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{piece?.Name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{piece?.Tier}</td>

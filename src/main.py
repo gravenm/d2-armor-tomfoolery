@@ -2,6 +2,9 @@ import pandas as pd
 import logging
 from itertools import combinations
 import colorlog
+import argparse
+import json
+import base64
 
 
 logger = logging.getLogger(__name__)
@@ -45,11 +48,6 @@ weighting_criteria = [
 weights = {
     "BST": 1.0,  # Base Stat Total (Global)
     "Artiface": 1.0,  # Artiface Slot (Global)
-    "2.0 Illegal Combos": 1.0,  # Base weight for illegal combos, individual weights will be added
-    "3.0 Archetype": 1.0,  # 3.0 Archetype (Major) - Base weight, will be adjusted per archetype
-    "3.0 Tier": 1.0,  # 3.0 Tier (Major) - Base weight, will be adjusted per tier
-    "Specific Stat Spikes": 1.3,  # Keep existing spike weight
-    # Removed "Bonus for Stats Not Matching Archetype"
 }
 
 # Define archetype specific weights (example values based on planning)
@@ -121,6 +119,31 @@ illegal_combo_weights = {
 
 stats = ['Health (Base)','Melee (Base)','Grenade (Base)','Super (Base)','Class (Base)','Weapons (Base)',]
 
+def main():
+    parser = argparse.ArgumentParser(description='Calculate armor weights.')
+    parser.add_argument('--weights', type=str, help='JSON string of custom weights')
+    args = parser.parse_args()
+
+    global weights, archetype_weights, tier_weights, illegal_combo_weights
+    if args.weights:
+        decoded_weights = base64.b64decode(args.weights).decode('utf-8')
+        custom_weights = json.loads(decoded_weights)
+        weights.update(custom_weights.get('general', {}))
+        archetype_weights.update(custom_weights.get('archetype', {}))
+        
+        custom_tier_weights = custom_weights.get('tier', {})
+        for tier, values in custom_tier_weights.items():
+            if not values.get('enabled', True):
+                tier_weights[tier] = {'low': 1.0, 'high': 1.0}
+            else:
+                tier_weights[tier] = {'low': values['low'], 'high': values['high']}
+
+        custom_illegal_combo_weights = custom_weights.get('illegal_combo', {})
+        for combo_str, value in custom_illegal_combo_weights.items():
+            combo = tuple(combo_str.split(','))
+            sorted_combo = tuple(sorted(combo))
+            illegal_combo_weights[sorted_combo] = value
+
 def calculate_armor_weight(
     armor_piece, weights, archetype_weights, tier_weights, illegal_combo_weights
 ):
@@ -165,7 +188,7 @@ def calculate_armor_weight(
                 and armor_piece[combo[0]] > 15
                 and armor_piece[combo[1]] > 15
             ):
-                combo_weight = illegal_combo_weights[sorted_combo] * weights["2.0 Illegal Combos"]
+                combo_weight = illegal_combo_weights[sorted_combo]
                 weight += combo_weight
                 logger.debug(f"  - Illegal Combo Bonus: {combo_weight:.2f} for {sorted_combo}. Current Total Weight: {weight:.2f}")
     elif armor_piece['Tier'] in [1, 2, 3, 4, 5]:
@@ -183,7 +206,7 @@ def calculate_armor_weight(
             else:
                 tier_weight_bonus = tier_weight_config["high"]
             
-            weight += tier_weight_bonus * weights["3.0 Tier"]
+            weight += tier_weight_bonus
             logger.debug(f"  - Tier Bonus: {tier_weight_bonus:.2f} for {tier_name}. Current Total Weight: {weight:.2f}")
 
     # 5. Specific Stat Spikes
@@ -204,11 +227,7 @@ def calculate_armor_weight(
             if matching_archetype and matching_archetype in archetype_weights:
                 spike_bonus = archetype_weights[matching_archetype]
                 logger.debug(f"  - Archetype Spike Bonus: {spike_bonus:.2f} for {matching_archetype}. Current Total Weight: {weight + spike_bonus:.2f}")
-            else:
-                spike_bonus = weights["Specific Stat Spikes"]
-                logger.debug(f"  - Generic Spike Bonus: {spike_bonus:.2f}. Current Total Weight: {weight + spike_bonus:.2f}")
-            
-            weight += spike_bonus
+                weight += spike_bonus
     
     logger.info(f"Final calculated weight for {armor_piece['Name']} ({armor_piece['Id']}): {weight:.2f}")
     return weight
@@ -237,14 +256,19 @@ length_weight_by_class = armor_df.groupby('Equippable')['Armor_Weight'].count()
 logger.info("\nTotal Armor Pieces by Class:")
 logger.info(length_weight_by_class)
 
-underweight_armor_per_class_list = []
+all_armor_by_class = {}
 
-logger.info("\nArmor pieces below the average weight for their respective class:")
+for equippable_class in ranked_armor_df['Equippable'].unique():
+    class_armor = ranked_armor_df[ranked_armor_df['Equippable'] == equippable_class]
+    all_armor_by_class[equippable_class] = {
+        'stats': {
+            'total_count': len(class_armor),
+            'average_weight': average_weight_by_class[equippable_class]
+        },
+        'armor': class_armor[['Id','Name','Tier', 'Equippable', 'Total', 'Armor_Weight']].to_dict('records')
+    }
 
-for equippable_class, avg_weight in average_weight_by_class.items():
-    logger.info(f"\n--- {equippable_class} (Average Weight: {avg_weight:.2f}) ---")
-    class_armor = armor_df[armor_df['Equippable'] == equippable_class]
-    underweight_class_armor = class_armor[class_armor['Armor_Weight'] < avg_weight]
-    underweight_armor_per_class_list.append(underweight_class_armor)
-    (underweight_class_armor[['Id','Name','Tier', 'Equippable', 'Total', 'Armor_Weight']]).to_csv(f'{equippable_class}-weighted.csv')
-    logger.info(f"Exported underweight armor for {equippable_class} to {equippable_class}-weighted.csv")
+print(json.dumps(all_armor_by_class))
+
+if __name__ == "__main__":
+    main()
